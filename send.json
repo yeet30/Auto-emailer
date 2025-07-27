@@ -1,0 +1,26 @@
+{
+  "gmail_address": "pepsites4u@gmail.com",
+  "app_password": "xnfu wioy qgiq pgcl",
+  "custom_domain": "main@pepsites.org",
+  "text1": "Hey {name}, I see you don’t have a website. Let me build one for free!",
+  "text2": "Hey {name}, I love your website! But I can make it even better — for free!",
+  "subject1": "Free Website Redesign Offer",
+  "subject2": "Want a Free Website for Your Business?",
+  "send_hour": 12,
+  "send_minute": 0,
+  "mailAmount": 2,
+  "contacts": [
+    {
+      "name": "Sa",
+      "email": "yigidoo0424@gmail.com",
+      "country": "Poland",
+      "has_website": false
+    },
+    {
+      "name": "Bro",
+      "email": "yeet2em@gmail.com",
+      "country": "Poland",
+      "has_website": true
+    }
+  ]
+}
