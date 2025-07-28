@@ -1,1 +1,0 @@
-name=TARGET_NAME

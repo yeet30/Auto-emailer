@@ -14,6 +14,7 @@ interface Contacts {
 
 interface CampaignBody {
   gmail_address : string;
+  sender_name: string;
   app_password : string;
   custom_domain : string;
   text1 : string;
@@ -29,6 +30,7 @@ interface CampaignBody {
 app.post('/start-campaign', async (req: Request, res: Response) => {
   const {
     gmail_address,
+    sender_name,
     app_password,
     custom_domain,
     text1,
@@ -44,6 +46,7 @@ app.post('/start-campaign', async (req: Request, res: Response) => {
   try {
     const response = await axios.post('http://localhost:5000/send', {
       gmail_address,
+      sender_name,
       app_password,
       custom_domain,
       text1,

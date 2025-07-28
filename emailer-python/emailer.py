@@ -1,15 +1,27 @@
 from flask import Flask, request, jsonify
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import pytz
 import pycountry
 import smtplib
+import threading
+import time
+import json
+import os
 
 app = Flask(__name__)
 
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
+STATUS_FILE = "campaign_status.json"
+
+campaign_status = ({
+    "status": "Has not started yet.",
+    "sent": 0,
+    "total_sent": 0,
+    "next_batch_after": 0
+})
 
 def get_timezone_from_country(country_name):
     try:
@@ -21,9 +33,9 @@ def get_timezone_from_country(country_name):
     except:
         return "UTC"
 
-def send_email(to_email, subject, body, gmail_address, app_password, custom_domain_email):
+def send_email(sender_name, to_email, subject, body, gmail_address, app_password, custom_domain_email):
     msg = MIMEMultipart()
-    msg["From"] = f"Pepsites <{custom_domain_email}>"
+    msg["From"] = f"{sender_name} <{custom_domain_email}>"
     msg["To"] = to_email
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain"))
@@ -39,12 +51,14 @@ def send_email(to_email, subject, body, gmail_address, app_password, custom_doma
         print(f"❌ Failed to send email to {to_email}: {e}")
         return False
 
-@app.route('/send', methods=['POST'])
-def send_emails():
-    data = request.get_json()
+def log_status(data):
+    with open(STATUS_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
-    # Campaign parameters from JSON
+def run_email_campaign(data):
+    #Assigns the user forwarded data to use in emailing
     gmail_address = data.get("gmail_address")
+    sender_name = data.get("sender_name")
     app_password = data.get("app_password")
     custom_domain = data.get("custom_domain")
     text1 = data.get("text1")
@@ -56,38 +70,78 @@ def send_emails():
     mail_amount = data.get("mail_amount", 10)
     contacts = data.get("contacts", [])
 
-    sent_count = 0
     sent_list = []
 
-    for contact in contacts:
-        if sent_count >= mail_amount:
-            break
+    while contacts[:]:
+        dailyTargets = contacts[:mail_amount]
+        dailySentMail = 0
+        tomorrowStartTime = datetime.now() + timedelta(hours=24)
 
-        name = contact.get("name")
-        email = contact.get("email")
-        country = contact.get("country")
-        has_website = contact.get("hasWebsite", False)
+        #Cycles through the daily target contacts
+        for contact in dailyTargets[:]:
+            contactName = contact.get("name")
+            contactEmail = contact.get("email")
+            contactCountry = contact.get("country")
+            contactHas_website = contact.get("hasWebsite")
+            contactCountryTimeNow = datetime.now(pytz.timezone(get_timezone_from_country(contactCountry)))
 
-        timezone_str = get_timezone_from_country(country)
-        now = datetime.now(pytz.timezone(timezone_str))
+            if contactCountryTimeNow.hour == send_hour and contactCountryTimeNow.minute == send_minute:
+                subject = subject1 if contactHas_website else subject2
+                body = text1 if contactHas_website else text2
+                body.format(name=contactName)
 
-        print(f"🌍 {name} ({country}) → Local Time: {now.hour:02d}:{now.minute:02d}")
+                #Sending the mail
+                success = send_email(sender_name, contactEmail, subject, body, gmail_address, app_password, custom_domain)
+                if success:
+                    dailySentMail += 1
+                    sent_list.append(contactEmail)
+                    contacts.remove(contact)
 
-        if now.hour == send_hour and now.minute == send_minute:
-            subject = subject1 if has_website else subject2
-            body = text1 if has_website else text2
-            personalized_body = body.replace("{name}", name)
+                    campaign_status = {
+                        "status": "running",
+                        "sent": sent_list,
+                        "total_sent": len(sent_list),
+                        "next_batch_after": 0
+                    }
+                    log_status(campaign_status)
+            time.sleep(60) #Checks through the daily targets each minute
 
-            success = send_email(email, subject, personalized_body, gmail_address, app_password, custom_domain)
-            if success:
-                sent_count += 1
-                sent_list.append(email)
+        #Calculates how much the loop has to wait to go through the daily batch again
+        wait_time = (tomorrowStartTime - datetime.now()).total_seconds()/3600 #in hours
 
-    return jsonify({
-        "status": "ok",
+        campaign_status = {
+            "status": "sleeping",
+            "sent": sent_list,
+            "total_sent": len(sent_list),
+            "next_batch_after": wait_time
+        }
+        log_status(campaign_status)
+
+        print(f"✅ Daily batch complete. Waiting {wait_time} time to continue the next day.")
+        time.sleep(wait_time*3600)
+
+    ########################
+    campaign_status = {
+        "status": "completed",
         "sent": sent_list,
-        "total_sent": sent_count
-    })
+        "total_sent": len(sent_list),
+        "next_batch_after": wait_time
+    }
+    log_status(campaign_status)
+
+@app.route('/send', methods=['POST'])
+def start_campaign():
+    data = request.get_json()
+    threading.Thread(target=run_email_campaign, args=(data,)).start()
+    return jsonify({"status": "started", "message": "Campaign running in background"})
+
+@app.route('/campaign-status', methods=['GET'])
+def get_campaign_status():
+    if not os.path.exists(STATUS_FILE):
+        return jsonify({"status": "no campaign started yet"})
+
+    with open(STATUS_FILE, "r") as f:
+        return jsonify(json.load(f))
 
 if __name__ == '__main__':
     app.run(port=5000)
