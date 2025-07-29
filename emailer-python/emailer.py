@@ -45,7 +45,7 @@ def send_email(sender_name, to_email, subject, body, gmail_address, app_password
             server.starttls()
             server.login(gmail_address, app_password)
             server.sendmail(custom_domain_email, to_email, msg.as_string())
-        print(f"✅ Email sent to {to_email} from {custom_domain_email}")
+        print(f"✅ Email sent to {to_email} from {custom_domain_email} at {datetime.now()}")
         return True
     except Exception as e:
         print(f"❌ Failed to send email to {to_email}: {e}")
@@ -65,12 +65,14 @@ def run_email_campaign(data):
     text2 = data.get("text2")
     subject1 = data.get("subject1")
     subject2 = data.get("subject2")
-    send_hour = data.get("send_hour", 12)
-    send_minute = data.get("send_minute", 0)
-    mail_amount = data.get("mail_amount", 10)
+    send_hour = data.get("send_hour")
+    send_minute = data.get("send_minute")
+    mail_amount = data.get("mail_amount")
     contacts = data.get("contacts", [])
 
     sent_list = []
+    sent_daily = []
+    print(f"The total amount of emails to be sent is: {len(contacts)}")
 
     while contacts[:]:
         dailyTargets = contacts[:mail_amount]
@@ -88,52 +90,64 @@ def run_email_campaign(data):
             if contactCountryTimeNow.hour == send_hour and contactCountryTimeNow.minute == send_minute:
                 subject = subject1 if contactHas_website else subject2
                 body = text1 if contactHas_website else text2
-                body.format(name=contactName)
+                body = body.format(name=contactName)
 
                 #Sending the mail
                 success = send_email(sender_name, contactEmail, subject, body, gmail_address, app_password, custom_domain)
                 if success:
                     dailySentMail += 1
                     sent_list.append(contactEmail)
+                    sent_daily.append(contactEmail)
                     contacts.remove(contact)
 
                     campaign_status = {
                         "status": "running",
-                        "sent": sent_list,
+                        "sent": sent_daily,
                         "total_sent": len(sent_list),
-                        "next_batch_after": 0
+                        "Will_be_running_for": wait_time_str
                     }
                     log_status(campaign_status)
-            time.sleep(60) #Checks through the daily targets each minute
+        time.sleep(60) #Checks through the daily targets each minute
 
         #Calculates how much the loop has to wait to go through the daily batch again
-        wait_time = (tomorrowStartTime - datetime.now()).total_seconds()/3600 #in hours
+        wait_time = (tomorrowStartTime - datetime.now()).total_seconds()
+        hours = int(wait_time) // 3600          #Gets the total hours
+        minutes = (int(wait_time) % 3600) // 60 #Gets the total minutes
+        wait_time_str = f"{hours} hours and {minutes} minutes"
 
         campaign_status = {
             "status": "sleeping",
-            "sent": sent_list,
+            "sent": sent_daily,
             "total_sent": len(sent_list),
-            "next_batch_after": wait_time
+            "next_batch_after": wait_time_str
         }
         log_status(campaign_status)
 
-        print(f"✅ Daily batch complete. Waiting {wait_time} time to continue the next day.")
-        time.sleep(wait_time*3600)
+        print(f"🆗 Daily batch complete. Waiting "+wait_time_str+" to continue the next day.")
+        time.sleep(wait_time)
+        sent_daily.clear()
 
     ########################
     campaign_status = {
         "status": "completed",
-        "sent": sent_list,
-        "total_sent": len(sent_list),
-        "next_batch_after": wait_time
+        "total_sent": sent_list,
     }
     log_status(campaign_status)
 
 @app.route('/send', methods=['POST'])
 def start_campaign():
     data = request.get_json()
+    total_amount = len(data.get("contacts",[]))
+    daily_amount=data.get("mail_amount")
     threading.Thread(target=run_email_campaign, args=(data,)).start()
-    return jsonify({"status": "started", "message": "Campaign running in background"})
+    return jsonify({
+        "status": "started", 
+        "mails_to_be_sent" : total_amount,
+        "daily_amount": daily_amount,
+        "estimated_campaign_time" : f"{total_amount/daily_amount} days",
+        "message": "Campaign running in background"
+        
+    })
 
 @app.route('/campaign-status', methods=['GET'])
 def get_campaign_status():
