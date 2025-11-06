@@ -4,155 +4,45 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Email Campaign</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-    }
-
-    label {
-      display: block;
-      margin-top: 10px;
-      font-weight: bold;
-    }
-
-    input,
-    textarea,
-    select {
-      width: 100%;
-      padding: 8px;
-      margin-top: 5px;
-      box-sizing: border-box;
-    }
-
-    .time-container {
-      display: flex;
-      gap: 10px;
-    }
-
-    .time-container>div {
-      flex: 1;
-    }
-
-    button {
-      margin-top: 20px;
-      padding: 10px 20px;
-      font-size: 16px;
-    }
-
-    #status {
-      margin-top: 20px;
-      white-space: pre-wrap;
-    }
-  </style>
+  <link rel="stylesheet" href="/style.css">
 </head>
 
 <body>
-  <form action="" id="form">
+  <div id="email-campaign-inputs">
     <label for="base-email">Base Email Address</label>
-    <input type="email" name="base-email" id="base-email" autocomplete="on" placeholder="The original email address the emails will be based upon" value="pepsites4u@gmail.com">
+    <input type="email" name="base-email" id="base-email" autocomplete="on" placeholder="The original email address the emails will be based upon" required>
     <label for="custom-email">Custom Email Address</label>
-    <input type="email" name="custom-email" id="custom-email" autocomplete="on" placeholder="The email address the reciever will see" value="main@pepsites.org">
+    <input type="email" name="custom-email" id="custom-email" autocomplete="on" placeholder="The email address the reciever will see" required>
     <label for="app-password">App Password</label>
-    <input type="password" name="app-password" id="app-password" autocomplete="on" placeholder="The app password for the original email address" value="xnfu wioy qgiq pgcl">
+    <input type="password" name="app-password" id="app-password" autocomplete="on" placeholder="The app password for the original email address" required>
     <label for="sender-name">Sender Name</label>
-    <input type="text" name="sender-name" id="sender-name" autocomplete="on" placeholder="The name the reciever will see the email being sent from" value="Pepsites">
+    <input type="text" name="sender-name" id="sender-name" autocomplete="on" placeholder="The name the reciever will see the email being sent from" required>
     <label for="subject">Subject</label>
-    <input type="text" name="subject" id="subject" autocomplete="on" placeholder="Subject of the email" value="Hey">
+    <input type="text" name="subject" id="subject" autocomplete="on" placeholder="Subject of the email" required>
     <label for="body">Body</label>
-    <textarea name="body" id="body" autocomplete="on" placeholder="Content of the email being sent">Nabıyon</textarea>
-    <label for="email-sending-date">Sending Start Date</label>
-    <input type="date" name="email-sending-date" id="email-sending-date" autocomplete="on">
-    <label for="email-sending-time">Email Sending Time</label>
-    <input type="time" id="email-sending-time" name="email-sending-time" autocomplete="on">
+    <textarea name="body" id="body" autocomplete="on" placeholder="Content of the email being sent" required></textarea>
+    <div id="date-selection-section">
+      <div>
+        <label for="email-sending-date">Sending Start Date</label>
+        <input type="date" name="email-sending-date" id="email-sending-date" autocomplete="on" required>
+      </div>
+      <div>
+        <label for="email-sending-time">Email Sending Time</label>
+        <input type="time" id="email-sending-time" name="email-sending-time" autocomplete="on" required>
+      </div>
+    </div>
     <label for="daily-email-amount">
       Daily Email Amount: <span id="range-value">15</span>
     </label>
     <input type="range" id="daily-email-amount" name="daily-email-amount" min="1" max="30" value="15">
     
     <label for="contact-list">List of Contacts</label>
-    <input type="file" id="contact-list">
+    <input type="file" id="contact-list" required>
 
     <button id="post">Post</button>
   </form>
 
-  <script>
-    const baseURL = "http://localhost:3000/"
-    const todayDate = new Date()
-    const todayDateString = dateToString(todayDate)
-    const maxDate = new Date(todayDate)
-    maxDate.setMonth(todayDate.getMonth()+1)
-    const maxDateString = dateToString(maxDate)
-    
-    const postBtn = document.getElementById('post')
-    const range = document.getElementById('daily-email-amount')
-    const output = document.getElementById('range-value')
-    const sending_date = document.getElementById('email-sending-date')
-    const sending_time = document.getElementById('email-sending-time')
-    sending_date.setAttribute('min', todayDateString.split("T")[0]) //sets the minimum date to today
-    sending_date.setAttribute('max', maxDateString.split("T")[0]) //sets the maximum date to a month later
-
-    range.addEventListener('input', () => {
-      output.textContent = range.value;
-    })
-    postBtn.addEventListener('click', postInfo)
-
-    async function postInfo(e) {
-      e.preventDefault();
-
-      const contactInput = document.getElementById('contact-list');
-      const file = contactInput.files[0];
-
-      if (!file) {
-        alert("Please select a contact list file.");
-        return;
-      }
-
-      // Read file contents as text
-      const text = await file.text();
-      let contact_list;
-
-      try {
-        contact_list = JSON.parse(text);
-      } catch (err) {
-        alert("Invalid JSON file format.");
-        console.error(err);
-        return;
-      }
-
-      const body = {
-        base_email: document.getElementById('base-email').value,
-        custom_email: document.getElementById('custom-email').value,
-        app_password: document.getElementById('app-password').value,
-        sender_name: document.getElementById('sender-name').value,
-        subject: document.getElementById('subject').value,
-        body: document.getElementById('body').value,
-        daily_cycle_starting_date: new Date(`${sending_date.value}T${sending_time.value}:00`).getTime(),
-        daily_email_amount: range.value,
-        contact_list // ✅ actual parsed JSON from file
-      };
-
-      console.log("Sending:", body);
-
-      const res = await fetch(baseURL + "send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
-
-      const result = await res.json().catch(() => null);
-      console.log("Response:", result);
-    }
-
-    function dateToString(date){
-      const yyyy = String(date.getFullYear()).padStart(2,'0')
-      const mm = String(date.getMonth()+1).padStart(2,'0')
-      const dd = String(date.getDate()).padStart(2,'0')
-      const hh = String(date.getHours()).padStart(2,'0')
-      const min = String(date.getMinutes()).padStart(2,'0')
-      return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
-    }
-  </script>
+  <script src="./build/public/script.js"></script>
 </body>
 
 
